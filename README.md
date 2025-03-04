@@ -119,7 +119,7 @@ Theres no need to config nessie, but we need nessie to be up
 ```bash
 docker compose up nessie  -d
 ```
-Enter http://localhost:9001
+Enter http://localhost:19120
 
 ### Dremio config
 
