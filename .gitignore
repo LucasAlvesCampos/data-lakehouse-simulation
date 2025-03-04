@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.env
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Logs
+logs/
+*.log
+log/
+
+# Local storage data (MinIO, Nessie, Dremio volumes)
+data/
+*_data/
+
+# Spark
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Generated files
+.cache
+.coverage
+htmlcov/
+coverage.xml
+.pytest_cache/
+
+# OS specific
+.DS_Store
+Thumbs.db

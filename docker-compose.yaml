@@ -1,0 +1,143 @@
+version: '3.8'
+
+services:
+  spark:
+    image: docker.io/bitnami/spark:3.5
+    container_name: spark
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_USER=spark
+    ports:
+      - '8080:8080'
+    networks:
+      - data-lakehouse
+
+  spark-worker-1:
+    image: docker.io/bitnami/spark:3.5
+    container_name: spark-worker-1
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_USER=spark
+    networks:
+      - data-lakehouse
+
+  spark-worker-2:
+    image: docker.io/bitnami/spark:3.5
+    container_name: spark-worker-2
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_USER=spark
+    networks:
+      - data-lakehouse
+
+  pyspark-app:
+    build: 
+      context: ./pyspark-docker-app
+      dockerfile: Dockerfile
+    container_name: pyspark-app
+    environment:
+      - SPARK_MASTER_URL=spark://spark:7077
+    command: ["spark-submit", "/app/src/jobs/raw_to_bronze.py"]
+    depends_on:
+      - spark
+      - minioserver
+      - nessie
+      - spark-worker-1
+      - spark-worker-2
+    networks:
+      - data-lakehouse
+
+  dremio:
+    platform: linux/x86_64
+    image: dremio/dremio-oss:latest
+    ports:
+      - 9047:9047
+      - 31010:31010
+      - 32010:32010
+    container_name: dremio
+    volumes:
+      - dremio_data:/opt/dremio/data
+      - dremio_conf:/opt/dremio/conf
+    environment:
+      - DREMIO_MAX_MEMORY_SIZE_MB=4096
+      - DREMIO_MAX_DIRECT_MEMORY_SIZE_MB=2048
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9047"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - data-lakehouse
+
+  minioserver:
+    image: minio/minio
+    ports:
+      - 9000:9000
+      - 9001:9001
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    container_name: minio
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - data-lakehouse
+
+  nessie:
+    image: projectnessie/nessie:0.67.0
+    container_name: nessie
+    ports:
+      - "19120:19120"
+    environment:
+      - NESSIE_VERSION_STORE_TYPE=ROCKSDB
+      - NESSIE_VERSION_STORE_ROCKS_ROOT=/nessie/rocks
+      - QUARKUS_OTEL_SDK_DISABLED=true
+    volumes:
+      - nessie_data:/nessie/rocks
+    depends_on:
+      - minioserver
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:19120"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - data-lakehouse
+
+volumes:
+  minio_data:
+    driver: local
+  dremio_data:
+    driver: local
+  dremio_conf:
+    driver: local
+  nessie_data:
+    driver: local
+
+networks:
+  data-lakehouse:
+    name: data-lakehouse
