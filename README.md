@@ -85,15 +85,97 @@ GOLD_TRANSPORT_TABLE=info_corridas_do_dia
 
 - Docker and Docker Compose
 - At least 8GB RAM available
+- Setup your Data Lakehouse configuration
 
-### Quick Start
+### Quick Start to Data Lakehouse configuration
 
 1. Set up environment variables:
 ```bash
 cp .env.example .env
 # Edit .env with your configurations
 ```
+Before we can start, we need to do some MiniO and Dremio Config
+This config is necessary only the first time running the Data Lakehouse
 
+```bash
+docker compose up minioserver –d
+```
+Enter http://localhost:9001
+
+Use the minioadmin:minioadmin to log in
+
+Create a bucket and create access keys
+
+Update your .env with the access keys and bucketname as your warehouse
+
+Now your MiniO is ready
+
+Lets get nessie running
+
+```bash
+docker compose up nessie  -d
+```
+Enter http://localhost:9001
+
+Just check if it is running by entering the URL, no need to config
+
+```bash
+docker compose up dremio -d
+```
+Enter http://localhost:9047
+
+Sign up (you can use fake data)
+
+After signed in click on add source > Amazon S3 
+
+On general settings set a name for you storage in Dremio and use your
+credencials from MiniO, uncheck encryption connection box and go 
+advanced options DO NOT SAVE YET
+
+In advanced settings Check Enable compatibility mode
+
+On root path put your warehouse name from MiniO
+
+Do not chance other settings
+
+Now add this connection properties
+
+Name: fs.s3a.path.style.access value: true
+Name: fs.s3a.endpoint value: minio:9000
+Name: dremio.s3.compat value: true
+
+Click save and your storage is now linked to Dremio!
+
+Now click add source again and select Nessie in the Lakehouse Catalog
+
+Name: Nessie
+
+Nessie URL: http://nessie:19120/api/v2
+
+And None to Authentication type
+
+Do not save and go to Storage options
+
+AWS root path should be your warehouse name
+
+Fill the aws credentials using your MiniO credentials that you created earlier
+
+Scroll down and in the section Others fill the connection properties with this:
+
+Name: fs.s3a.path.style.access value: true
+Name: fs.s3a.endpoint value: minio:9000
+Name: dremio.s3.compat value: true
+
+Uncheck Encryption box
+
+Click save and you are finally done setting up your Lakehouse
+
+### Quick Start to run Application
+
+1. Set up environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your configurations
 2. Run the application:
 ```bash
 # Start all services
