@@ -87,7 +87,7 @@ GOLD_TRANSPORT_TABLE=info_corridas_do_dia
 - At least 8GB RAM available
 - Setup your Data Lakehouse configuration
 
-### Quick Start to Data Lakehouse configuration
+## Quick Start to Data Lakehouse configuration
 
 Before we can start, we need to do some MiniO and Dremio Config
 This config is necessary only the first time running the Data Lakehouse
@@ -97,7 +97,7 @@ This config is necessary only the first time running the Data Lakehouse
 cp .env.example .env
 # Edit .env with your configurations
 ```
-## Minio Config
+### Minio Config
 
 ```bash
 docker compose up minioserver –d
@@ -112,7 +112,7 @@ Update your .env with the access keys and bucketname as your warehouse
 
 Now your MiniO is ready!
 
-## Nessie run
+### Nessie run
 
 Theres no need to config nessie, but we need nessie to be up
 
@@ -121,7 +121,7 @@ docker compose up nessie  -d
 ```
 Enter http://localhost:9001
 
-## Dremio config
+### Dremio config
 
 ```bash
 docker compose up dremio -d
@@ -176,7 +176,7 @@ Click save and you are finally done setting up your Lakehouse!
 
 Now you can explore it using Dremio to view your data and query
 
-### Quick Start to run Application
+## Quick Start to run Application
 
 1. Set up environment variables:
 ```bash
