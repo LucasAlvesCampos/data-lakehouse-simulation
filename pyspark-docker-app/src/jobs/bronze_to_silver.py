@@ -20,7 +20,7 @@ def main():
 
         # Read Iceberg table from Bronze layer
         logger.info(f"Reading source table from Bronze layer: {BRONZE_LAYER_DATABASE}.{BRONZE_TRANSPORT_TABLE}...")
-        df = spark.table(f"nessie.{BRONZE_LAYER_DATABASE}.{BRONZE_TRANSPORT_TABLE}")
+        df = spark.table(f"{LAKEHOUSE_CATALOG}.{BRONZE_LAYER_DATABASE}.{BRONZE_TRANSPORT_TABLE}")
         
         # Extract date and time from timestamp and separate in two columns
         df = df.withColumn("HORA_INICIO", col("DATA_INICIO").substr(12, 8))\
@@ -47,10 +47,10 @@ def main():
         cleaned_df.show(5, truncate=False)
         
         # Create database and table
-        table_name = f"nessie.{SILVER_LAYER_DATABASE}.{SILVER_TRANSPORT_TABLE}"
+        table_name = f"{LAKEHOUSE_CATALOG}.{SILVER_LAYER_DATABASE}.{SILVER_TRANSPORT_TABLE}"
         logger.info(f"Creating Iceberg table: {table_name}")
             
-        spark.sql(f"CREATE DATABASE IF NOT EXISTS nessie.{SILVER_LAYER_DATABASE}")
+        spark.sql(f"CREATE DATABASE IF NOT EXISTS {LAKEHOUSE_CATALOG}.{SILVER_LAYER_DATABASE}")
 
         # Save cleaned data using the cleaned dataframe
         logger.info(f"\nSaving cleaned data to Silver layer: {SILVER_LAYER_DATABASE}.{SILVER_TRANSPORT_TABLE}...")

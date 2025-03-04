@@ -19,7 +19,7 @@ def main():
 
         # Read the cleansed data from Silver layer
         logger.info(f"Reading source table from Silver layer: {SILVER_LAYER_DATABASE}.{SILVER_TRANSPORT_TABLE}...")
-        df = spark.table(f"nessie.{SILVER_LAYER_DATABASE}.{SILVER_TRANSPORT_TABLE}")
+        df = spark.table(f"{LAKEHOUSE_CATALOG}.{SILVER_LAYER_DATABASE}.{SILVER_TRANSPORT_TABLE}")
 
         # Create daily aggregations
         daily_stats = df.groupBy(date_format('DATA_INICIO', 'yyyy-MM-dd').alias('DT_REFE')) \
@@ -40,10 +40,10 @@ def main():
         daily_stats.show(5, truncate=False)
 
         # Create database and table
-        table_name = f"nessie.{GOLD_LAYER_DATABASE}.{GOLD_TRANSPORT_TABLE}"
+        table_name = f"{LAKEHOUSE_CATALOG}.{GOLD_LAYER_DATABASE}.{GOLD_TRANSPORT_TABLE}"
         logger.info(f"Creating Iceberg table: {table_name}")
             
-        spark.sql(f"CREATE DATABASE IF NOT EXISTS nessie.{GOLD_LAYER_DATABASE}")
+        spark.sql(f"CREATE DATABASE IF NOT EXISTS {LAKEHOUSE_CATALOG}.{GOLD_LAYER_DATABASE}")
 
         # Save results to new Iceberg table in Gold layer
         logger.info(f"\nSaving results to Gold layer: {GOLD_LAYER_DATABASE}.{GOLD_TRANSPORT_TABLE}...")

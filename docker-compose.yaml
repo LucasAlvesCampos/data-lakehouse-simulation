@@ -55,7 +55,7 @@ services:
     container_name: pyspark-app
     environment:
       - SPARK_MASTER_URL=spark://spark:7077
-    command: ["spark-submit", "/app/src/jobs/raw_to_bronze.py"]
+    command: ["spark-submit", "/app/src/jobs/silver_to_gold.py"]
     depends_on:
       - spark
       - minioserver

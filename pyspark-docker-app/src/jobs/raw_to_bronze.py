@@ -33,10 +33,10 @@ def main():
         logger.info(f"Total records: {df.count()}")
         
         # Create database and table
-        table_name = f"nessie.{BRONZE_LAYER_DATABASE}.{BRONZE_TRANSPORT_TABLE}"
+        table_name = f"{LAKEHOUSE_CATALOG}.{BRONZE_LAYER_DATABASE}.{BRONZE_TRANSPORT_TABLE}"
         logger.info(f"Creating Iceberg table: {table_name}")
         
-        spark.sql(f"CREATE DATABASE IF NOT EXISTS nessie.{BRONZE_LAYER_DATABASE}")
+        spark.sql(f"CREATE DATABASE IF NOT EXISTS {LAKEHOUSE_CATALOG}.{BRONZE_LAYER_DATABASE}")
         
         # Write to Iceberg table with optimizations
         df.writeTo(table_name) \
@@ -46,7 +46,7 @@ def main():
             .tableProperty("write.metadata.compression-codec", "gzip") \
             .createOrReplace()
         
-        logger.info("Data successfully saved as Iceberg table in Nessie catalog")
+        logger.info(f"Data successfully saved as Iceberg table in {LAKEHOUSE_CATALOG} catalog")
         
         # Log execution time
         execution_time = datetime.now() - start_time
