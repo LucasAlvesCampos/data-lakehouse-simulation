@@ -1,5 +1,6 @@
 import logging
-from pyspark.sql.functions import col, when, to_date
+import re
+from pyspark.sql.functions import col, when, to_date, regexp_extract, length, lit
 from pyspark.sql.types import StringType, IntegerType, DateType
 from src.utils.spark_utils import create_spark_session
 from src.config.config import *
@@ -22,26 +23,93 @@ def main():
         logger.info(f"Reading source table from Bronze layer: {BRONZE_LAYER_DATABASE}.{BRONZE_TRANSPORT_TABLE}...")
         df = spark.table(f"{LAKEHOUSE_CATALOG}.{BRONZE_LAYER_DATABASE}.{BRONZE_TRANSPORT_TABLE}")
         
-        # Extract date and time from timestamp and separate in two columns
-        df = df.withColumn("HORA_INICIO", col("DATA_INICIO").substr(12, 8))\
-            .withColumn("HORA_FIM", col("DATA_FIM").substr(12, 8))\
-            .withColumn("DATA_INICIO", to_date(col("DATA_INICIO").substr(1, 10), "MM-dd-yyyy"))\
-            .withColumn("DATA_FIM", to_date(col("DATA_FIM").substr(1, 10), "MM-dd-yyyy"))
+        # Count rows before dropping duplicates
+        row_count_before = df.count()
+        logger.info(f"Number of rows before dropping duplicates: {row_count_before}")
 
-        # Clean and transform data
+        # Drop duplicates if there are any
+        df = df.dropDuplicates()
+        
+        # Count rows after dropping duplicates
+        row_count_after = df.count()
+        logger.info(f"Number of rows after dropping duplicates: {row_count_after}")
+        
+        # Report if any duplicates were found and removed
+        if row_count_before > row_count_after:
+            logger.warning(f"Found and removed {row_count_before - row_count_after} duplicate rows")
+        else:
+            logger.info("No duplicate rows found")
+
+        # Check for NULL dates and invalid formats
+        date_pattern = "^\\d{2}-\\d{2}-\\d{4}\\s\\d{1,2}:\\d{2}$"
+        
+        # Add validation columns
+        df_validated = df.withColumn(
+            "DATA_INICIO_VALID", 
+            when(col("DATA_INICIO").isNull(), lit(False))
+            .when(col("DATA_INICIO").rlike(date_pattern), lit(True))
+            .otherwise(lit(False))
+        ).withColumn(
+            "DATA_FIM_VALID", 
+            when(col("DATA_FIM").isNull(), lit(False))
+            .when(col("DATA_FIM").rlike(date_pattern), lit(True))
+            .otherwise(lit(False))
+        )
+        
+        # Count invalid records
+        invalid_start_dates = df_validated.filter(~col("DATA_INICIO_VALID")).count()
+        invalid_end_dates = df_validated.filter(~col("DATA_FIM_VALID")).count()
+        
+        logger.info(f"Found {invalid_start_dates} records with NULL or invalid DATA_INICIO format")
+        logger.info(f"Found {invalid_end_dates} records with NULL or invalid DATA_FIM format")
+        
+        # Show sample of invalid records if any exist
+        if invalid_start_dates > 0:
+            logger.warning("Sample of records with invalid DATA_INICIO:")
+            df_validated.filter(~col("DATA_INICIO_VALID")).select("DATA_INICIO", "DATA_FIM", "CATEGORIA").show(5, False)
+
+        if invalid_end_dates > 0:
+            logger.warning("Sample of records with invalid DATA_FIM:")
+            df_validated.filter(~col("DATA_FIM_VALID")).select("DATA_INICIO", "DATA_FIM", "CATEGORIA").show(5, False)
+        
+        # Extract date and time from timestamp and separate in two columns, handling null and invalid formats
+        df_transformed = df_validated.withColumn(
+            "HORA_INICIO", 
+            when(col("DATA_INICIO_VALID"), col("DATA_INICIO").substr(12, 5))
+            .otherwise(lit("00:00"))
+        ).withColumn(
+            "HORA_FIM", 
+            when(col("DATA_FIM_VALID"), col("DATA_FIM").substr(12, 5))
+            .otherwise(lit("00:00"))
+        ).withColumn(
+            "DATA_INICIO", 
+            when(col("DATA_INICIO_VALID"), to_date(col("DATA_INICIO").substr(1, 10), "MM-dd-yyyy"))
+            .otherwise(lit("1900-01-01").cast(DateType()))
+        ).withColumn(
+            "DATA_FIM", 
+            when(col("DATA_FIM_VALID"), to_date(col("DATA_FIM").substr(1, 10), "MM-dd-yyyy"))
+            .otherwise(lit("1900-01-01").cast(DateType()))
+        )
+        
+        # Drop the validation columns
+        df = df_transformed.drop("DATA_INICIO_VALID", "DATA_FIM_VALID")
+        
+        # Clean and transform data and scheme enforcement
         logger.info("\nCleaning and transforming data...")
         cleaned_df = df.select(
             col("DATA_INICIO").cast(DateType()),
-            col("HORA_INICIO"),  # Include the new time column
+            col("HORA_INICIO").cast(StringType()),
             col("DATA_FIM").cast(DateType()),
-            col("HORA_FIM"),     # Include the new time column
-            when(col("CATEGORIA").isNull(), "N/A").otherwise(col("CATEGORIA")).cast(StringType()).alias("CATEGORIA"),
-            when(col("LOCAL_INICIO").isNull(), "N/A").otherwise(col("LOCAL_INICIO")).cast(StringType()).alias("LOCAL_INICIO"),
-            when(col("LOCAL_FIM").isNull(), "N/A").otherwise(col("LOCAL_FIM")).cast(StringType()).alias("LOCAL_FIM"),        
+            col("HORA_FIM").cast(StringType()),
+            when(col("CATEGORIA").isNull(), "Categoria não reclarada").otherwise(col("CATEGORIA")).cast(StringType()).alias("CATEGORIA"),
+            when(col("LOCAL_INICIO").isNull(), "Local de inicio não declarado").otherwise(col("LOCAL_INICIO")).cast(StringType()).alias("LOCAL_INICIO"),
+            when(col("LOCAL_FIM").isNull(), "Local final não declarado").otherwise(col("LOCAL_FIM")).cast(StringType()).alias("LOCAL_FIM"),        
             when(col("DISTANCIA").isNull(), 0).otherwise(col("DISTANCIA")).cast(IntegerType()).alias("DISTANCIA"),
-            when(col("PROPOSITO").isNull(), "N/A").otherwise(col("PROPOSITO")).cast(StringType()).alias("PROPOSITO")
+            when(col("PROPOSITO").isNull(), "Propósito não declarado").otherwise(col("PROPOSITO")).cast(StringType()).alias("PROPOSITO")
         )
         
+        cleaned_df.printSchema()
+
         # Show sample of cleaned data
         logger.info("\nSample of cleaned data:")
         cleaned_df.show(5, truncate=False)
