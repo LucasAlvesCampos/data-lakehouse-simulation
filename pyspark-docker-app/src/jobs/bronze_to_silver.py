@@ -1,7 +1,7 @@
 import logging
 import re
-from pyspark.sql.functions import col, when, to_date, regexp_extract, length, lit
-from pyspark.sql.types import StringType, IntegerType, DateType
+from pyspark.sql.functions import col, when, to_date, regexp_extract, length, lit, regexp_replace, to_timestamp, concat, sum, count
+from pyspark.sql.types import StringType, IntegerType, DateType, TimestampType, FloatType
 from src.utils.spark_utils import create_spark_session
 from src.config.config import *
 
@@ -11,6 +11,31 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+"""
+Silver Layer Schema Documentation:
+
+Date/Time Columns:
+- DATA_INICIO (DateType): Start date, NULL if invalid
+- HORA_INICIO (TimestampType): Start timestamp, NULL if invalid
+- DATA_FIM (DateType): End date, NULL if invalid
+- HORA_FIM (TimestampType): End timestamp, NULL if invalid
+
+Categorical Columns:
+- CATEGORIA (StringType): Category, "Unknown Category" if NULL
+- LOCAL_INICIO (StringType): Start location, "Unknown Location" if NULL
+- LOCAL_FIM (StringType): End location, "Unknown Location" if NULL
+- PROPOSITO (StringType): Purpose, "Unknown Purpose" if NULL
+
+Numeric Columns:
+- DISTANCIA (FloatType): Distance, 0 if NULL
+
+Data Quality Rules:
+1. Invalid dates/times are set to NULL for data quality tracking
+2. Categorical fields use meaningful default values
+3. Numeric fields default to 0 when NULL
+4. No duplicate records allowed
+"""
 
 def main():
     """Main execution function"""
@@ -40,19 +65,46 @@ def main():
         else:
             logger.info("No duplicate rows found")
 
-        # Check for NULL dates and invalid formats
-        date_pattern = "^\\d{2}-\\d{2}-\\d{4}\\s\\d{1,2}:\\d{2}$"
-        
+        date_patterns = {
+            'single_digit_hour': "^\\d{2}-\\d{2}-\\d{4}\\s\\d{1}:\\d{2}$",
+            'double_digit_hour': "^\\d{2}-\\d{2}-\\d{4}\\s\\d{2}:\\d{2}$"
+        }
+
+        # Check for single-digit hours in timestamp and fix the format
+        df = df.withColumn(
+            "DATA_INICIO",
+            when(
+                col("DATA_INICIO").rlike(date_patterns['single_digit_hour']),
+                regexp_replace(
+                    col("DATA_INICIO"),
+                    "(\\d{2}-\\d{2}-\\d{4}\\s)(\\d):(\\d{2})",
+                    "$100:$3"
+                )
+            ).otherwise(col("DATA_INICIO"))
+        )
+
+        df = df.withColumn(
+            "DATA_FIM",
+            when(
+                col("DATA_FIM").rlike(date_patterns['single_digit_hour']),
+                regexp_replace(
+                    col("DATA_FIM"),
+                    "(\\d{2}-\\d{2}-\\d{4}\\s)(\\d):(\\d{2})",
+                    "$100:$3"
+                )
+            ).otherwise(col("DATA_FIM"))
+        )
+
         # Add validation columns
         df_validated = df.withColumn(
             "DATA_INICIO_VALID", 
             when(col("DATA_INICIO").isNull(), lit(False))
-            .when(col("DATA_INICIO").rlike(date_pattern), lit(True))
+            .when(col("DATA_INICIO").rlike(date_patterns['double_digit_hour']), lit(True))
             .otherwise(lit(False))
         ).withColumn(
             "DATA_FIM_VALID", 
             when(col("DATA_FIM").isNull(), lit(False))
-            .when(col("DATA_FIM").rlike(date_pattern), lit(True))
+            .when(col("DATA_FIM").rlike(date_patterns["double_digit_hour"]), lit(True))
             .otherwise(lit(False))
         )
         
@@ -75,39 +127,76 @@ def main():
         # Extract date and time from timestamp and separate in two columns, handling null and invalid formats
         df_transformed = df_validated.withColumn(
             "HORA_INICIO", 
-            when(col("DATA_INICIO_VALID"), col("DATA_INICIO").substr(12, 5))
-            .otherwise(lit("00:00"))
+            when(col("DATA_INICIO_VALID"), 
+                to_timestamp(concat(col("DATA_INICIO").substr(1, 10), lit(" "), 
+                                col("DATA_INICIO").substr(12, 5)), "MM-dd-yyyy HH:mm"))
+            .otherwise(lit(None).cast(TimestampType()))  
         ).withColumn(
             "HORA_FIM", 
-            when(col("DATA_FIM_VALID"), col("DATA_FIM").substr(12, 5))
-            .otherwise(lit("00:00"))
+            when(col("DATA_FIM_VALID"), 
+                to_timestamp(concat(col("DATA_FIM").substr(1, 10), lit(" "), 
+                                col("DATA_FIM").substr(12, 5)), "MM-dd-yyyy HH:mm"))
+            .otherwise(lit(None).cast(TimestampType()))  
         ).withColumn(
             "DATA_INICIO", 
-            when(col("DATA_INICIO_VALID"), to_date(col("DATA_INICIO").substr(1, 10), "MM-dd-yyyy"))
-            .otherwise(lit("1900-01-01").cast(DateType()))
+            when(col("DATA_INICIO_VALID"), 
+                 to_date(col("DATA_INICIO").substr(1, 10), "MM-dd-yyyy"))
+            .otherwise(lit(None).cast(DateType()))  
         ).withColumn(
             "DATA_FIM", 
-            when(col("DATA_FIM_VALID"), to_date(col("DATA_FIM").substr(1, 10), "MM-dd-yyyy"))
-            .otherwise(lit("1900-01-01").cast(DateType()))
+            when(col("DATA_FIM_VALID"), 
+                 to_date(col("DATA_FIM").substr(1, 10), "MM-dd-yyyy"))
+            .otherwise(lit(None).cast(DateType()))  # Use NULL instead of 1900-01-01
         )
         
         # Drop the validation columns
         df = df_transformed.drop("DATA_INICIO_VALID", "DATA_FIM_VALID")
         
-        # Clean and transform data and scheme enforcement
+        # Clean and transform data and schema enforcement
         logger.info("\nCleaning and transforming data...")
         cleaned_df = df.select(
-            col("DATA_INICIO").cast(DateType()),
-            col("HORA_INICIO").cast(StringType()),
-            col("DATA_FIM").cast(DateType()),
-            col("HORA_FIM").cast(StringType()),
-            when(col("CATEGORIA").isNull(), "Categoria não reclarada").otherwise(col("CATEGORIA")).cast(StringType()).alias("CATEGORIA"),
-            when(col("LOCAL_INICIO").isNull(), "Local de inicio não declarado").otherwise(col("LOCAL_INICIO")).cast(StringType()).alias("LOCAL_INICIO"),
-            when(col("LOCAL_FIM").isNull(), "Local final não declarado").otherwise(col("LOCAL_FIM")).cast(StringType()).alias("LOCAL_FIM"),        
-            when(col("DISTANCIA").isNull(), 0).otherwise(col("DISTANCIA")).cast(IntegerType()).alias("DISTANCIA"),
-            when(col("PROPOSITO").isNull(), "Propósito não declarado").otherwise(col("PROPOSITO")).cast(StringType()).alias("PROPOSITO")
+            col("DATA_INICIO"),
+            col("HORA_INICIO"),
+            col("DATA_FIM"),
+            col("HORA_FIM"),
+            when(col("CATEGORIA").isNull(), "Unknown Category").otherwise(col("CATEGORIA")).cast(StringType()).alias("CATEGORIA"),
+            when(col("LOCAL_INICIO").isNull(), "Unknown Location").otherwise(col("LOCAL_INICIO")).cast(StringType()).alias("LOCAL_INICIO"),
+            when(col("LOCAL_FIM").isNull(), "Unknown Location").otherwise(col("LOCAL_FIM")).cast(StringType()).alias("LOCAL_FIM"),        
+            when(col("DISTANCIA").isNull(), 0).otherwise(col("DISTANCIA")).cast(FloatType()).alias("DISTANCIA"),
+            when(col("PROPOSITO").isNull(), "Unknown Purpose").otherwise(col("PROPOSITO")).cast(StringType()).alias("PROPOSITO")
         )
         
+        # Add after cleaned_df creation
+        data_quality_metrics = cleaned_df.select(
+            # Start date/time metrics
+            sum(col("DATA_INICIO").isNull().cast("int")).alias("null_data_inicio_count"),
+            sum(col("HORA_INICIO").isNull().cast("int")).alias("null_hora_inicio_count"),
+            
+            # End date/time metrics
+            sum(col("DATA_FIM").isNull().cast("int")).alias("null_data_fim_count"),
+            sum(col("HORA_FIM").isNull().cast("int")).alias("null_hora_fim_count"),
+            
+            # Other metrics
+            sum(col("DISTANCIA").isNull().cast("int")).alias("null_distance_count"),
+            count("*").alias("total_records")
+        ).collect()[0]
+
+        logger.info(f"""
+        Data Quality Metrics:
+        Total Records: {data_quality_metrics.total_records}
+
+        Start Date/Time Nulls:
+        - DATA_INICIO: {data_quality_metrics.null_data_inicio_count}
+        - HORA_INICIO: {data_quality_metrics.null_hora_inicio_count}
+
+        End Date/Time Nulls:
+        - DATA_FIM: {data_quality_metrics.null_data_fim_count}
+        - HORA_FIM: {data_quality_metrics.null_hora_fim_count}
+
+        Other Metrics:
+        - Null Distances: {data_quality_metrics.null_distance_count}
+        """)
+
         cleaned_df.printSchema()
 
         # Show sample of cleaned data
