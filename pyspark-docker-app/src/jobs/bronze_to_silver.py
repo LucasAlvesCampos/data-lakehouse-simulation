@@ -1,7 +1,6 @@
 import logging
-import re
-from pyspark.sql.functions import col, when, to_date, regexp_extract, length, lit, regexp_replace, to_timestamp, concat, sum, count
-from pyspark.sql.types import StringType, IntegerType, DateType, TimestampType, FloatType
+from pyspark.sql.functions import col, when, to_date, lit, regexp_replace, to_timestamp, concat, sum, count
+from pyspark.sql.types import StringType, DateType, TimestampType, FloatType
 from src.utils.spark_utils import create_spark_session
 from src.config.config import *
 
@@ -146,7 +145,7 @@ def main():
             "DATA_FIM", 
             when(col("DATA_FIM_VALID"), 
                  to_date(col("DATA_FIM").substr(1, 10), "MM-dd-yyyy"))
-            .otherwise(lit(None).cast(DateType()))  # Use NULL instead of 1900-01-01
+            .otherwise(lit(None).cast(DateType()))  
         )
         
         # Drop the validation columns
