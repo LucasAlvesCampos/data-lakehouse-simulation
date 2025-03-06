@@ -12,6 +12,14 @@ This PySpark application implements a modern data lakehouse architecture using A
 - **MinIO**: S3-compatible object storage
 - **Dremio**: Data lakehouse platform and SQL query engine
 
+Key Features
+Medallion Architecture: Multi-layer data processing (raw, bronze, silver, gold)
+Incremental Processing: Only process new data since last run
+Data Quality Checks: Validation at each transformation step
+Schema Evolution: Support for changing data structures
+Comprehensive Testing: Unit tests for all transformation logic
+Docker Deployment: Fully containerized for easy setup
+
 ## Project Structure
 
 ```
@@ -50,7 +58,8 @@ pyspark-docker-app/
    - Daily aggregations
    - Category-wise statistics
    - Performance indicators
-
+   - Incremental Processing
+   
 ## Configuration
 
 ### Environment Variables
@@ -219,29 +228,6 @@ docker-compose run pyspark-app pytest
 - Nessie API: http://localhost:19120/api/v1
 - Dremio UI: http://localhost:9047
 
-## Troubleshooting
-
-### Common Issues
-
-1. **Connection Errors**
-   - Verify all services are running: `docker-compose ps`
-   - Check service logs: `docker-compose logs [service-name]`
-
-2. **Data Not Found**
-   - Verify MinIO credentials in `.env`
-   - Check if data files exist in the correct S3 path
-
-3. **Pipeline Failures**
-   - Check job logs for detailed error messages
-   - Verify data quality and schema compatibility
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
 
 ## License
 
