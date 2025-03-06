@@ -37,7 +37,7 @@ def table_exists(spark, table_name):
         
         if not table_exists:
             logging.warning(f"Table {table_name} does not exist yet.")
-            return False  # <-- Return False, not None
+            return False
         else:
             logging.info(f"Table {table_name} exists.")
             return True
@@ -46,7 +46,7 @@ def table_exists(spark, table_name):
          logging.warning(f"Error checking table existence: {str(e)}")
          import traceback
          logging.warning(traceback.format_exc())
-         return False  # <-- Return False, not None
+         return False
 
 
 def get_last_processed_date(spark, table_name, date_column):
