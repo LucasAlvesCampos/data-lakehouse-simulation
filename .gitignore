@@ -46,7 +46,7 @@ logs/
 log/
 
 # Local storage data (MinIO, Nessie, Dremio volumes)
-data/
+
 *_data/
 
 # Spark

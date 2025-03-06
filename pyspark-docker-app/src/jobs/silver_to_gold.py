@@ -1,6 +1,6 @@
 import logging
 from pyspark.sql.functions import *
-from src.utils.spark_utils import create_spark_session
+from src.utils.spark_utils import create_spark_session, get_last_processed_date, table_exists
 from src.config.config import *
 
 # Configure logging
@@ -17,14 +17,29 @@ def main():
         spark = create_spark_session()
         logger.info("Spark Running")
 
+        # Define Gold table name
+        table_name = f"{LAKEHOUSE_CATALOG}.{GOLD_LAYER_DATABASE}.{GOLD_TRANSPORT_TABLE}"
+
+        # Get the latest processed date from the Gold table
+        latest_processed_date = get_last_processed_date(spark, table_name, "DT_REFE")
+        logger.info(f"Latest processed date: {latest_processed_date}")
+
         # Read and filter the cleansed data from Silver layer
         logger.info(f"Reading source table from Silver layer: {SILVER_LAYER_DATABASE}.{SILVER_TRANSPORT_TABLE}...")
-        df = spark.table(f"{LAKEHOUSE_CATALOG}.{SILVER_LAYER_DATABASE}.{SILVER_TRANSPORT_TABLE}") \
-            .filter(col("DATA_INICIO").isNotNull() & (col("DISTANCIA") > 0))
+        df = spark.table(f"{LAKEHOUSE_CATALOG}.{SILVER_LAYER_DATABASE}.{SILVER_TRANSPORT_TABLE}")
+
+        if latest_processed_date:
+            df = df.filter((col("DATA_INICIO") > latest_processed_date) & col("DATA_INICIO").isNotNull() & (col("DISTANCIA") > 0))
+        else:
+            df = df.filter(col("DATA_INICIO").isNotNull() & (col("DISTANCIA") > 0))
 
         # Log filtered records count
         total_records = df.count()
         logger.info(f"Number of valid records after filtering: {total_records}")
+
+        if total_records == 0:
+            logger.info("No new data to process.")
+            return
 
         # Create daily aggregations
         daily_stats = df.groupBy(col("DATA_INICIO").alias("DT_REFE")) \
@@ -45,18 +60,25 @@ def main():
         logger.info("\nSample of daily statistics:")
         daily_stats.show(5, truncate=False)
 
-        # Create database and table
-        table_name = f"{LAKEHOUSE_CATALOG}.{GOLD_LAYER_DATABASE}.{GOLD_TRANSPORT_TABLE}"
+        # Create database and table if not exists
         logger.info(f"Creating Iceberg table: {table_name}")
-            
         spark.sql(f"CREATE DATABASE IF NOT EXISTS {LAKEHOUSE_CATALOG}.{GOLD_LAYER_DATABASE}")
 
-        # Save results to new Iceberg table in Gold layer
+        # Save new data to Gold table in append mode
         logger.info(f"\nSaving results to Gold layer: {GOLD_LAYER_DATABASE}.{GOLD_TRANSPORT_TABLE}...")
-        daily_stats.writeTo(table_name) \
-            .using("iceberg") \
-            .createOrReplace()
 
+        if table_exists(spark, table_name):
+            logger.info("Table already exists. Appending new data...")
+            daily_stats.writeTo(table_name) \
+                .using("iceberg") \
+                .append()
+        else:
+            # Create new table
+            logger.info("Table does not exist. Creating new table...")
+            daily_stats.writeTo(table_name) \
+                .using("iceberg") \
+                .createOrReplace()
+            
         logger.info("Daily statistics calculation completed successfully!")
 
     except Exception as e:
