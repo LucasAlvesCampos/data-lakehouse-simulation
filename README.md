@@ -12,13 +12,14 @@ This PySpark application implements a modern data lakehouse architecture using A
 - **MinIO**: S3-compatible object storage
 - **Dremio**: Data lakehouse platform and SQL query engine
 
-Key Features
-Medallion Architecture: Multi-layer data processing (raw, bronze, silver, gold)
-Incremental Processing: Only process new data since last run
-Data Quality Checks: Validation at each transformation step
-Schema Evolution: Support for changing data structures
-Comprehensive Testing: Unit tests for all transformation logic
-Docker Deployment: Fully containerized for easy setup
+## Key Features
+
+- **Medallion Architecture**: Multi-layer data processing (raw, bronze, silver, gold)
+- **Incremental Processing**: Only process new data since last run
+- **Data Quality Checks**: Validation at each transformation step
+- **Schema Evolution**: Support for changing data structures
+- **Comprehensive Testing**: Unit tests for all transformation logic
+- **Docker Deployment**: Fully containerized for easy setup
 
 ## Project Structure
 
