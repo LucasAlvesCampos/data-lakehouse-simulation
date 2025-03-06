@@ -65,8 +65,8 @@ def main():
             logger.info("No duplicate rows found")
 
         date_patterns = {
-            'single_digit_hour': "^\\d{2}-\\d{2}-\\d{4}\\s\\d{1}:\\d{2}$",
-            'double_digit_hour': "^\\d{2}-\\d{2}-\\d{4}\\s\\d{2}:\\d{2}$"
+            'single_digit_hour': "^(\\d{2}-\\d{2}-\\d{4})\\s(\\d):(\\d{2})$",
+            'double_digit_hour': "^(\\d{2}-\\d{2}-\\d{4})\\s(\\d{2}):(\\d{2})$"
         }
 
         # Check for single-digit hours in timestamp and fix the format
@@ -76,8 +76,8 @@ def main():
                 col("DATA_INICIO").rlike(date_patterns['single_digit_hour']),
                 regexp_replace(
                     col("DATA_INICIO"),
-                    "(\\d{2}-\\d{2}-\\d{4}\\s)(\\d):(\\d{2})",
-                    "$100:$3"
+                    "^(\\d{2}-\\d{2}-\\d{4})\\s(\\d):(\\d{2})$",
+                    "$1 0$2:$3"
                 )
             ).otherwise(col("DATA_INICIO"))
         )
@@ -88,8 +88,8 @@ def main():
                 col("DATA_FIM").rlike(date_patterns['single_digit_hour']),
                 regexp_replace(
                     col("DATA_FIM"),
-                    "(\\d{2}-\\d{2}-\\d{4}\\s)(\\d):(\\d{2})",
-                    "$100:$3"
+                    "^(\\d{2}-\\d{2}-\\d{4})\\s(\\d):(\\d{2})$", 
+                    "$1 0$2:$3"
                 )
             ).otherwise(col("DATA_FIM"))
         )

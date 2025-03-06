@@ -22,8 +22,14 @@ RUN cd /opt/bitnami/spark/jars && \
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
+# Install testing dependencies
+RUN pip3 install pytest pytest-cov
+
 # Copy the application code
 COPY src/ /app/src/
+
+# Copy test files
+COPY tests/ /app/tests/
 
 # Switch back to non-root user
 USER 1001
